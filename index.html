@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>TruthLens — AI Fake News Detector</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a24;
+    --border: #2a2a3a;
+    --accent-real: #00e5a0;
+    --accent-fake: #ff3d6b;
+    --accent-sus: #ffb800;
+    --accent-blue: #4d9fff;
+    --text: #e8e8f0;
+    --text-dim: #6b6b88;
+    --text-mid: #a0a0bc;
+    --glow-real: rgba(0,229,160,0.10);
+    --glow-fake: rgba(255,61,107,0.10);
+    --glow-sus: rgba(255,184,0,0.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Syne', sans-serif; min-height: 100vh; overflow-x: hidden; }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background-image: linear-gradient(rgba(77,159,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(77,159,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px; pointer-events: none; z-index: 0;
+  }
+  .orb { position: fixed; border-radius: 50%; filter: blur(80px); pointer-events: none; z-index: 0; opacity: 0.4; }
+  .orb-1 { width: 400px; height: 400px; background: rgba(77,159,255,0.12); top: -100px; right: -100px; }
+  .orb-2 { width: 300px; height: 300px; background: rgba(0,229,160,0.08); bottom: 100px; left: -50px; }
+
+  header { position: relative; z-index: 10; padding: 22px 40px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); backdrop-filter: blur(10px); }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-icon { width: 36px; height: 36px; }
+  .logo-icon svg { width: 100%; height: 100%; }
+  .logo-text { font-size: 1.3rem; font-weight: 800; letter-spacing: -0.02em; }
+  .logo-text span { color: var(--accent-blue); }
+  .badge { font-family: 'Space Mono', monospace; font-size: 0.62rem; color: var(--accent-blue); border: 1px solid rgba(77,159,255,0.3); padding: 4px 10px; border-radius: 20px; background: rgba(77,159,255,0.06); letter-spacing: 0.1em; }
+
+  main { position: relative; z-index: 5; max-width: 860px; margin: 0 auto; padding: 50px 24px 80px; }
+
+  .hero { text-align: center; margin-bottom: 48px; }
+  .hero-tag { font-family: 'Space Mono', monospace; font-size: 0.68rem; letter-spacing: 0.2em; color: var(--accent-blue); margin-bottom: 18px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .hero-tag::before, .hero-tag::after { content: ''; display: block; width: 28px; height: 1px; background: var(--accent-blue); opacity: 0.5; }
+  h1 { font-size: clamp(2.2rem, 5.5vw, 3.5rem); font-weight: 800; line-height: 1.06; letter-spacing: -0.03em; margin-bottom: 16px; }
+  h1 .line2 { background: linear-gradient(135deg, var(--accent-blue), var(--accent-real)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .hero-sub { color: var(--text-mid); font-size: 1rem; max-width: 500px; margin: 0 auto; line-height: 1.6; }
+  .engine-note { display: flex; align-items: center; gap: 8px; justify-content: center; margin-top: 14px; font-family: 'Space Mono', monospace; font-size: 0.62rem; color: var(--text-dim); letter-spacing: 0.08em; }
+  .engine-dot { width: 6px; height: 6px; background: var(--accent-real); border-radius: 50%; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .input-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 28px; margin-bottom: 24px; transition: border-color 0.3s; }
+  .input-card:focus-within { border-color: rgba(77,159,255,0.4); }
+  .input-label { font-family: 'Space Mono', monospace; font-size: 0.68rem; letter-spacing: 0.12em; color: var(--text-dim); margin-bottom: 12px; display: block; }
+  .tabs { display: flex; gap: 4px; background: var(--surface2); border-radius: 10px; padding: 4px; margin-bottom: 18px; width: fit-content; }
+  .tab { font-family: 'Space Mono', monospace; font-size: 0.7rem; padding: 7px 15px; border-radius: 7px; border: none; cursor: pointer; color: var(--text-dim); background: transparent; transition: all 0.2s; letter-spacing: 0.04em; }
+  .tab.active { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  textarea { width: 100%; min-height: 170px; background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 14px; color: var(--text); font-family: 'Syne', sans-serif; font-size: 0.93rem; line-height: 1.6; resize: vertical; outline: none; transition: border-color 0.2s; }
+  textarea::placeholder { color: var(--text-dim); }
+  textarea:focus { border-color: rgba(77,159,255,0.4); }
+  .txt-input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 13px 15px; color: var(--text); font-family: 'Syne', sans-serif; font-size: 0.93rem; outline: none; transition: border-color 0.2s; }
+  .txt-input::placeholder { color: var(--text-dim); }
+  .txt-input:focus { border-color: rgba(77,159,255,0.4); }
+  .input-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; flex-wrap: wrap; gap: 10px; }
+  .char-count { font-family: 'Space Mono', monospace; font-size: 0.66rem; color: var(--text-dim); }
+  .analyze-btn { display: flex; align-items: center; gap: 9px; background: linear-gradient(135deg, var(--accent-blue), #6b4dff); color: white; border: none; padding: 12px 26px; border-radius: 10px; font-family: 'Syne', sans-serif; font-size: 0.93rem; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+  .analyze-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 28px rgba(77,159,255,0.28); }
+  .analyze-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .samples { margin-bottom: 24px; }
+  .samples-label { font-family: 'Space Mono', monospace; font-size: 0.66rem; letter-spacing: 0.12em; color: var(--text-dim); margin-bottom: 10px; }
+  .sample-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .sample-btn { font-family: 'Space Mono', monospace; font-size: 0.66rem; padding: 7px 13px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text-mid); cursor: pointer; transition: all 0.2s; }
+  .sample-btn:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
+
+  .loading { display: none; text-align: center; padding: 44px 28px; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; margin-bottom: 24px; }
+  .loading.visible { display: block; }
+  .loader-ring { width: 52px; height: 52px; border: 3px solid var(--border); border-top: 3px solid var(--accent-blue); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 18px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { font-family: 'Space Mono', monospace; font-size: 0.75rem; color: var(--text-dim); letter-spacing: 0.08em; }
+  .loading-steps { margin-top: 14px; display: flex; flex-direction: column; gap: 5px; align-items: center; }
+  .loading-step { font-family: 'Space Mono', monospace; font-size: 0.62rem; color: var(--text-dim); opacity: 0; animation: fadeStep 0.5s forwards; }
+  .loading-step:nth-child(1){animation-delay:0.2s} .loading-step:nth-child(2){animation-delay:0.6s} .loading-step:nth-child(3){animation-delay:1.0s} .loading-step:nth-child(4){animation-delay:1.4s}
+  @keyframes fadeStep { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+
+  .error-card { display: none; background: rgba(255,61,107,0.08); border: 1px solid rgba(255,61,107,0.2); border-radius: 16px; padding: 20px; margin-bottom: 24px; text-align: center; color: var(--accent-fake); font-size: 0.88rem; }
+  .error-card.visible { display: block; }
+
+  .result-card { display: none; background: var(--surface); border-radius: 20px; overflow: hidden; margin-bottom: 24px; animation: slideUp 0.4s ease; }
+  .result-card.visible { display: block; }
+  @keyframes slideUp { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
+
+  .result-header { padding: 24px 28px; display: flex; align-items: center; gap: 18px; border-bottom: 1px solid var(--border); }
+  .result-header.real { background: var(--glow-real); border-color: rgba(0,229,160,0.2); }
+  .result-header.fake { background: var(--glow-fake); border-color: rgba(255,61,107,0.2); }
+  .result-header.suspicious { background: var(--glow-sus); border-color: rgba(255,184,0,0.2); }
+  .verdict-icon { font-size: 2.6rem; line-height: 1; }
+  .verdict-info { flex: 1; }
+  .verdict-label { font-family: 'Space Mono', monospace; font-size: 0.65rem; letter-spacing: 0.15em; color: var(--text-dim); margin-bottom: 3px; }
+  .verdict-text { font-size: 1.7rem; font-weight: 800; letter-spacing: -0.02em; }
+  .verdict-text.real{color:var(--accent-real)} .verdict-text.fake{color:var(--accent-fake)} .verdict-text.suspicious{color:var(--accent-sus)}
+
+  .confidence-ring { width: 68px; height: 68px; position: relative; flex-shrink: 0; }
+  .confidence-ring svg { width: 68px; height: 68px; transform: rotate(-90deg); }
+  .ring-bg { fill: none; stroke: var(--border); stroke-width: 5; }
+  .ring-fill { fill: none; stroke-width: 5; stroke-linecap: round; stroke-dasharray: 176; transition: stroke-dashoffset 1.2s ease; }
+  .ring-fill.real{stroke:var(--accent-real)} .ring-fill.fake{stroke:var(--accent-fake)} .ring-fill.suspicious{stroke:var(--accent-sus)}
+  .confidence-val { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .confidence-num { font-family: 'Space Mono', monospace; font-size: 0.95rem; font-weight: 700; line-height: 1; }
+  .confidence-num.real{color:var(--accent-real)} .confidence-num.fake{color:var(--accent-fake)} .confidence-num.suspicious{color:var(--accent-sus)}
+  .confidence-pct { font-family: 'Space Mono', monospace; font-size: 0.52rem; color: var(--text-dim); }
+
+  .result-body { padding: 24px 28px; }
+  .result-section { margin-bottom: 24px; }
+  .result-section:last-child { margin-bottom: 0; }
+  .section-title { font-family: 'Space Mono', monospace; font-size: 0.65rem; letter-spacing: 0.12em; color: var(--text-dim); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .summary-text { color: var(--text-mid); font-size: 0.92rem; line-height: 1.7; }
+
+  .indicators { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 9px; }
+  .indicator { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: flex; align-items: flex-start; gap: 9px; }
+  .indicator-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+  .indicator-dot.positive{background:var(--accent-real)} .indicator-dot.negative{background:var(--accent-fake)} .indicator-dot.neutral{background:var(--accent-sus)}
+  .indicator-text { font-size: 0.8rem; color: var(--text-mid); line-height: 1.4; }
+
+  .score-bars { display: flex; flex-direction: column; gap: 11px; }
+  .score-header { display: flex; justify-content: space-between; margin-bottom: 5px; }
+  .score-name { font-size: 0.8rem; color: var(--text-mid); }
+  .score-val { font-family: 'Space Mono', monospace; font-size: 0.72rem; color: var(--text-dim); }
+  .score-bar { height: 5px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+  .score-fill { height: 100%; border-radius: 3px; width: 0%; transition: width 1.1s ease; }
+
+  .highlighted-text { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 14px; font-size: 0.86rem; line-height: 1.8; color: var(--text-mid); }
+  .highlight-fake { background: rgba(255,61,107,0.18); border-bottom: 2px solid var(--accent-fake); padding: 1px 3px; border-radius: 3px; }
+
+  .recommendation { background: var(--surface2); border-radius: 12px; padding: 15px 18px; display: flex; gap: 13px; align-items: flex-start; }
+  .rec-icon { font-size: 1.3rem; flex-shrink: 0; margin-top: 2px; }
+  .rec-text { font-size: 0.86rem; color: var(--text-mid); line-height: 1.6; }
+  .rec-text strong { color: var(--text); }
+
+  .history-section { margin-top: 36px; }
+  .history-title { font-family: 'Space Mono', monospace; font-size: 0.65rem; letter-spacing: 0.12em; color: var(--text-dim); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .history-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .history-list { display: flex; flex-direction: column; gap: 7px; }
+  .history-item { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 11px 15px; display: flex; align-items: center; gap: 11px; font-size: 0.83rem; }
+  .history-verdict { font-family: 'Space Mono', monospace; font-size: 0.6rem; letter-spacing: 0.08em; padding: 3px 8px; border-radius: 5px; flex-shrink: 0; font-weight: 700; }
+  .history-verdict.real{background:rgba(0,229,160,0.12);color:var(--accent-real)} .history-verdict.fake{background:rgba(255,61,107,0.12);color:var(--accent-fake)} .history-verdict.suspicious{background:rgba(255,184,0,0.12);color:var(--accent-sus)}
+  .history-snippet { flex: 1; color: var(--text-mid); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .history-conf { font-family: 'Space Mono', monospace; font-size: 0.66rem; color: var(--text-dim); flex-shrink: 0; }
+
+  footer { position: relative; z-index: 5; text-align: center; padding: 22px; border-top: 1px solid var(--border); font-family: 'Space Mono', monospace; font-size: 0.63rem; color: var(--text-dim); letter-spacing: 0.08em; }
+  footer span { color: var(--accent-blue); }
+
+  @media(max-width:600px){
+    header{padding:16px 18px} main{padding:36px 14px 60px}
+    .result-header{flex-wrap:wrap;padding:18px} .result-body{padding:18px}
+    .input-card{padding:18px} .indicators{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="19" cy="19" r="18" stroke="#4d9fff" stroke-width="1.5" stroke-dasharray="4 2"/>
+        <path d="M19 8L22 15H29L23.5 19.5L25.5 27L19 23L12.5 27L14.5 19.5L9 15H16L19 8Z" fill="#4d9fff" opacity="0.8"/>
+        <circle cx="19" cy="19" r="4" fill="#4d9fff"/>
+      </svg>
+    </div>
+    <div class="logo-text">Truth<span>Lens</span></div>
+  </div>
+  <div class="badge">NLP ENGINE v1.0</div>
+</header>
+
+<main>
+  <div class="hero">
+    <div class="hero-tag">QUANTUM ARENA 1.0 — HACKATHON PROJECT</div>
+    <h1>
+      <div class="line1">Detect Misinformation</div>
+      <div class="line2">Before It Spreads</div>
+    </h1>
+    <p class="hero-sub">Paste any news article or headline and our NLP engine will analyze it for credibility, bias, and authenticity.</p>
+    <div class="engine-note">
+      <div class="engine-dot"></div>
+      LOCAL NLP ENGINE — WORKS FULLY OFFLINE, NO INTERNET NEEDED
+    </div>
+  </div>
+
+  <div class="samples">
+    <div class="samples-label">TRY A SAMPLE —</div>
+    <div class="sample-btns">
+      <button class="sample-btn" onclick="loadSample('fake1')">🔴 Fake: Miracle Cure</button>
+      <button class="sample-btn" onclick="loadSample('real1')">🟢 Real: Climate Report</button>
+      <button class="sample-btn" onclick="loadSample('sus1')">🟡 Suspicious: Election</button>
+      <button class="sample-btn" onclick="loadSample('fake2')">🔴 Fake: Celebrity Death</button>
+    </div>
+  </div>
+
+  <div class="input-card">
+    <span class="input-label">INPUT MODE</span>
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('text',this)">Paste Article</button>
+      <button class="tab" onclick="switchTab('headline',this)">Headline Only</button>
+    </div>
+    <div id="text-input-wrap">
+      <textarea id="article-text" placeholder="Paste your news article, social media post, or any text you want to verify here..." oninput="updateCount()"></textarea>
+    </div>
+    <div id="headline-input-wrap" style="display:none">
+      <input type="text" class="txt-input" id="article-headline" placeholder="Type or paste the news headline here..." oninput="updateCount()"/>
+    </div>
+    <div class="input-footer">
+      <span class="char-count" id="char-count">0 characters</span>
+      <button class="analyze-btn" id="analyze-btn" onclick="analyze()">
+        <span>🔍</span> Analyze Now
+      </button>
+    </div>
+  </div>
+
+  <div class="loading" id="loading">
+    <div class="loader-ring"></div>
+    <div class="loading-text">RUNNING NLP ANALYSIS...</div>
+    <div class="loading-steps">
+      <div class="loading-step">▶ Tokenizing and preprocessing text...</div>
+      <div class="loading-step">▶ Detecting sensationalist language patterns...</div>
+      <div class="loading-step">▶ Scoring credibility signals...</div>
+      <div class="loading-step">▶ Generating verdict and report...</div>
+    </div>
+  </div>
+
+  <div class="error-card" id="error-card">⚠️ <span id="error-msg">Please enter some text.</span></div>
+
+  <div class="result-card" id="result-card">
+    <div class="result-header" id="result-header">
+      <div class="verdict-icon" id="verdict-icon">🔍</div>
+      <div class="verdict-info">
+        <div class="verdict-label">AI VERDICT</div>
+        <div class="verdict-text" id="verdict-text">—</div>
+      </div>
+      <div class="confidence-ring">
+        <svg viewBox="0 0 68 68">
+          <circle class="ring-bg" cx="34" cy="34" r="28"/>
+          <circle class="ring-fill" id="ring-fill" cx="34" cy="34" r="28" stroke-dashoffset="176"/>
+        </svg>
+        <div class="confidence-val">
+          <div class="confidence-num" id="conf-num">0%</div>
+          <div class="confidence-pct">CONF.</div>
+        </div>
+      </div>
+    </div>
+    <div class="result-body">
+      <div class="result-section">
+        <div class="section-title">ANALYSIS SUMMARY</div>
+        <div class="summary-text" id="summary-text"></div>
+      </div>
+      <div class="result-section">
+        <div class="section-title">CREDIBILITY BREAKDOWN</div>
+        <div class="score-bars" id="score-bars"></div>
+      </div>
+      <div class="result-section">
+        <div class="section-title">KEY INDICATORS</div>
+        <div class="indicators" id="indicators"></div>
+      </div>
+      <div class="result-section" id="highlight-section">
+        <div class="section-title">FLAGGED PHRASES</div>
+        <div class="highlighted-text" id="highlighted-text"></div>
+      </div>
+      <div class="result-section">
+        <div class="section-title">RECOMMENDATION</div>
+        <div class="recommendation" id="recommendation"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="history-section" id="history-section" style="display:none">
+    <div class="history-title">RECENT ANALYSES</div>
+    <div class="history-list" id="history-list"></div>
+  </div>
+</main>
+
+<footer>Built for <span>Quantum Arena 1.0</span> &nbsp;·&nbsp; Local NLP Engine — No API Required &nbsp;·&nbsp; Navsahyadri, Pune</footer>
+
+<script>
+// ══════════════════════════════════════════════════════
+//  TRUTHLENS — SELF-CONTAINED NLP ANALYSIS ENGINE
+//  Works 100% offline. No API. No backend needed.
+// ══════════════════════════════════════════════════════
+
+const NLP = {
+  sensational: ['breaking','shocking','bombshell','explosive','miracle','exposed','secret','hidden','leaked','suppressed','banned','censored','wake up','share before','gets deleted','going viral','you won\'t believe','mind blowing','jaw dropping','unbelievable','incredible','amazing','insane','crazy','huge','massive','destroy','obliterate','slam','annihilate','savage','epic fail','explosive','bombshell','stunning','outrageous'],
+  fear: ['danger','dangerous','deadly','death','kill','murder','attack','threat','terror','terrifying','horrifying','disturbing','alarming','crisis','catastrophe','disaster','emergency','urgent','immediately','warning','beware','afraid','scared'],
+  conspiracy: ['deep state','mainstream media','big pharma','big tech','government is hiding','cover up','cover-up','they want you','illuminati','new world order','globalist','puppet','controlled','brainwashed','sheep','sheeple','truth they hide','banned by','shadow ban','anonymous source','sources say','insiders claim','allegedly','reportedly','unverified','cannot be confirmed','rumored','they don\'t want'],
+  credible: ['study','research','scientists','researchers','according to','published','journal','university','data','statistics','percent','survey','report','official','government','spokesperson','confirmed','verified','evidence','peer-reviewed','findings','analysis','investigation','documented','citation','expert','professor','doctor','phd','institute','organization'],
+  vague: ['many people','some say','people are saying','everyone knows','it is known','sources say','insiders say','anonymous','they say','word is','rumor has it','apparently','seemingly','supposedly','so-called','alleged','unconfirmed','could be','perhaps','maybe','speculation','might be'],
+
+  match(text, list) {
+    const lower = text.toLowerCase();
+    const found = list.filter(w => lower.includes(w));
+    return { count: found.length, found };
+  },
+
+  capsCount(text) {
+    return (text.split(/\s+/).filter(w => w.length > 3 && w === w.toUpperCase() && /[A-Z]/.test(w))).length;
+  },
+
+  punctScore(text) {
+    return ((text.match(/!/g)||[]).length) + ((text.match(/\?/g)||[]).length);
+  },
+
+  numericFacts(text) {
+    return (text.match(/\d+(\.\d+)?(%|°|billion|million|thousand|kg|km|mph|degrees|studies|countries|years)/gi)||[]).length;
+  },
+
+  namedEntities(text) {
+    const skip = new Set(['The','This','That','These','Those','When','Where','What','Which','Who','How','But','And','For','Yet','So','In','On','At','By','Of','To','A','An','Is','Are','Was','Were']);
+    return text.split(/\s+/).filter(w => /^[A-Z][a-z]{2,}/.test(w) && !skip.has(w)).length;
+  },
+
+  run(text) {
+    const s   = this.match(text, this.sensational);
+    const f   = this.match(text, this.fear);
+    const c   = this.match(text, this.conspiracy);
+    const cr  = this.match(text, this.credible);
+    const v   = this.match(text, this.vague);
+    const caps   = this.capsCount(text);
+    const punct  = this.punctScore(text);
+    const nums   = this.numericFacts(text);
+    const ents   = this.namedEntities(text);
+    const sents  = (text.match(/[.!?]+/g)||[]).length || 1;
+
+    // Score dimensions (0–100)
+    let factual = Math.max(5, Math.min(100, 55 + cr.count*8 + nums*6 - v.count*7 - c.count*10));
+    let srcCred  = Math.max(5, Math.min(100, 50 + ents*2 + cr.count*6 - c.count*9 - (text.toLowerCase().includes('anonymous')?20:0)));
+    let emotional = Math.max(5, Math.min(100, 100 - s.count*9 - f.count*7 - caps*5 - punct*3));
+    let logical   = Math.max(5, Math.min(100, 55 + sents*2 - v.count*6 - (caps>3?15:0) - (punct>4?10:0)));
+    let verifiable= Math.max(5, Math.min(100, 35 + nums*9 + ents*3 - v.count*5));
+
+    // Composite scores
+    const fakeScore = s.count*10 + f.count*7 + c.count*12 + caps*5 + punct*3 + v.count*6 - cr.count*8 - nums*6 - ents*2;
+    const realScore = cr.count*10 + nums*8 + ents*3 + sents*1.5 - s.count*8 - c.count*10 - caps*4;
+    const diff = fakeScore - realScore;
+
+    let verdict, confidence;
+    if (diff > 22)       { verdict='FAKE';       confidence = Math.min(95, 62 + Math.min(diff,32)); }
+    else if (diff > 7)   { verdict='SUSPICIOUS'; confidence = Math.min(88, 56 + Math.min(diff*1.2,28)); }
+    else if (diff < -8)  { verdict='REAL';       confidence = Math.min(92, 59 + Math.min(Math.abs(diff),30)); }
+    else                 { verdict='SUSPICIOUS'; confidence = 52 + Math.floor(Math.random()*8); }
+    confidence = Math.round(confidence);
+
+    // Indicators
+    const inds = [];
+    if (s.count > 1) inds.push({type:'negative', text:`${s.count} sensationalist words found (e.g. "${s.found.slice(0,2).join('", "')}")`});
+    if (cr.count > 1) inds.push({type:'positive', text:`${cr.count} credibility markers present (e.g. "${cr.found.slice(0,2).join('", "')}")`});
+    if (c.count > 0) inds.push({type:'negative', text:`Conspiracy language: "${c.found.slice(0,2).join('", "')}"`});
+    if (v.count > 1) inds.push({type:'negative', text:`${v.count} vague/unverifiable claims found`});
+    if (nums > 0) inds.push({type:'positive', text:`${nums} numeric/statistical fact${nums>1?'s':''} boost credibility`});
+    if (caps > 2) inds.push({type:'negative', text:`Excessive ALL-CAPS (${caps} words) — sensationalist signal`});
+    if (punct > 3) inds.push({type:'negative', text:`${punct} exclamation/question marks — emotional writing style`});
+    if (ents > 4) inds.push({type:'positive', text:`Multiple named entities — suggests grounded reporting`});
+    if (text.toLowerCase().includes('anonymous')) inds.push({type:'neutral', text:'Anonymous or unnamed sources cited'});
+    if (inds.length < 3) inds.push({type:'neutral', text:'Limited context available — cross-check recommended'});
+
+    // Summaries
+    const summaryMap = {
+      FAKE: `This content shows strong signs of misinformation. It relies on ${s.count>0?'sensationalist language, ':''}${c.count>0?'conspiracy rhetoric, ':''}and ${v.count>0?'unverifiable claims':'emotionally charged framing'} — patterns consistently associated with fabricated news. Credible markers like citations, statistics, or named sources are largely absent.`,
+      REAL: `This content shows characteristics of factual reporting. ${cr.count>0?`It references credible sources and uses measured language.`:''} ${nums>0?`Specific numeric facts (${nums} found) improve verifiability.`:''} Sensationalist language is minimal, suggesting good-faith journalism. Independent verification is still recommended.`,
+      SUSPICIOUS: `This content contains mixed credibility signals. ${cr.count>0?'Some credibility markers are present, but ':''} ${v.count>0?'vague sourcing':'certain claims'} and ${s.count>0?'sensationalist framing ':''} reduce confidence. This may be partially accurate but selectively framed. Verify through multiple trusted sources before sharing.`
+    };
+
+    const flaggedPhrases = [...s.found.slice(0,3), ...c.found.slice(0,2), ...v.found.slice(0,2)].slice(0,6);
+
+    const recMap = {
+      FAKE: '🚫 <strong>Do not share this content.</strong> Strong indicators of misinformation detected. Cross-check with Reuters, AP News, or BBC. If found on social media, consider reporting it.',
+      REAL: '✅ <strong>Content appears credible</strong>, but always verify independently. Cross-check key claims with 2–3 reputable sources. Even well-written articles can contain errors.',
+      SUSPICIOUS: '🔎 <strong>Proceed with caution.</strong> Mixed credibility signals detected. Find the original source, check if reputable outlets covered this story, and be skeptical of unattributed claims.'
+    };
+
+    return {
+      verdict, confidence,
+      summary: summaryMap[verdict],
+      scores: { factual_accuracy: factual, source_credibility: srcCred, emotional_manipulation: emotional, logical_consistency: logical, verifiable_claims: verifiable },
+      indicators: inds.slice(0, 5),
+      flaggedPhrases,
+      recommendation: recMap[verdict]
+    };
+  }
+};
+
+// ── UI ──────────────────────────────────────────────
+let currentTab = 'text';
+let analysisHistory = [];
+
+const SAMPLES = {
+  fake1: "BREAKING: Scientists Discover Miracle Cure That Eliminates ALL Cancer in 24 Hours! Big Pharma is HIDING this revolutionary treatment that costs only $5 to make. Thousands already cured but mainstream media refuses to report it. Share before it gets deleted! This natural remedy has been SUPPRESSED by the government for 30 years. Wake up sheeple!!!",
+  real1: "The Intergovernmental Panel on Climate Change (IPCC) released its latest assessment report indicating that global temperatures have risen approximately 1.1 degrees Celsius above pre-industrial levels. The report, compiled by over 200 scientists from 66 countries, states that limiting warming to 1.5 degrees would require rapid changes in energy, land use, and transportation. The findings are based on over 14,000 peer-reviewed scientific studies.",
+  sus1: "Leaked documents allegedly show widespread voter fraud in the recent election, with millions of ballots said to have been altered. Anonymous sources within the government claim to have proof but cannot reveal their identity. Officials have dismissed these claims, but many people are saying this could be the biggest scandal ever. The documents, whose authenticity has not been confirmed, are circulating on social media.",
+  fake2: "SHOCKING: Famous actor found dead in Los Angeles home at age 45!! The star was reportedly discovered by their housekeeper on Tuesday morning. No official statement has been released yet but sources close to the family confirm the tragic news. Mainstream media is covering this up!!! Share this before it gets taken down — they don't want you to know!!!"
+};
+
+function loadSample(key) {
+  document.getElementById('article-text').value = SAMPLES[key];
+  if (currentTab !== 'text') switchTab('text', document.querySelector('.tab'));
+  updateCount();
+}
+
+function switchTab(tab, btn) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('text-input-wrap').style.display = tab === 'text' ? 'block' : 'none';
+  document.getElementById('headline-input-wrap').style.display = tab === 'headline' ? 'block' : 'none';
+  updateCount();
+}
+
+function getText() {
+  return currentTab === 'text'
+    ? document.getElementById('article-text').value
+    : document.getElementById('article-headline').value;
+}
+
+function updateCount() {
+  document.getElementById('char-count').textContent = getText().length + ' characters';
+}
+
+function showError(msg) {
+  document.getElementById('error-msg').textContent = msg;
+  document.getElementById('error-card').classList.add('visible');
+}
+function hideError() { document.getElementById('error-card').classList.remove('visible'); }
+
+function analyze() {
+  const text = getText().trim();
+  if (text.length < 20) { showError('Please enter at least 20 characters to analyze.'); return; }
+  hideError();
+  document.getElementById('result-card').classList.remove('visible');
+  document.getElementById('analyze-btn').disabled = true;
+
+  const loading = document.getElementById('loading');
+  loading.classList.add('visible');
+  loading.querySelectorAll('.loading-step').forEach(s => { s.style.animation='none'; void s.offsetHeight; s.style.animation=''; });
+
+  setTimeout(() => {
+    loading.classList.remove('visible');
+    const result = NLP.run(text);
+    renderResult(result, text);
+    addToHistory(result, text);
+    document.getElementById('analyze-btn').disabled = false;
+  }, 2000);
+}
+
+function renderResult(r, originalText) {
+  const vc = r.verdict === 'SUSPICIOUS' ? 'suspicious' : r.verdict.toLowerCase();
+  const icons = {REAL:'✅', FAKE:'❌', SUSPICIOUS:'⚠️'};
+
+  document.getElementById('result-header').className = `result-header ${vc}`;
+  document.getElementById('verdict-icon').textContent = icons[r.verdict];
+  const vt = document.getElementById('verdict-text');
+  vt.textContent = r.verdict;
+  vt.className = `verdict-text ${vc}`;
+
+  const rf = document.getElementById('ring-fill');
+  rf.className = `ring-fill ${vc}`;
+  setTimeout(() => { rf.style.strokeDashoffset = 176 - (176 * r.confidence / 100); }, 80);
+  const cn = document.getElementById('conf-num');
+  cn.textContent = r.confidence + '%';
+  cn.className = `confidence-num ${vc}`;
+
+  document.getElementById('summary-text').textContent = r.summary;
+
+  const scoreColors = {factual_accuracy:'#4d9fff', source_credibility:'#a855f7', emotional_manipulation:'#ff3d6b', logical_consistency:'#00e5a0', verifiable_claims:'#ffb800'};
+  const scoreLabels = {factual_accuracy:'Factual Accuracy', source_credibility:'Source Credibility', emotional_manipulation:'Emotional Manipulation', logical_consistency:'Logical Consistency', verifiable_claims:'Verifiable Claims'};
+  const sb = document.getElementById('score-bars');
+  sb.innerHTML = Object.entries(r.scores).map(([k,v]) =>
+    `<div><div class="score-header"><span class="score-name">${scoreLabels[k]}</span><span class="score-val">${v}/100</span></div>
+     <div class="score-bar"><div class="score-fill" style="background:${scoreColors[k]}" data-w="${v}%"></div></div></div>`
+  ).join('');
+  setTimeout(() => sb.querySelectorAll('.score-fill').forEach(el => el.style.width = el.dataset.w), 80);
+
+  document.getElementById('indicators').innerHTML = r.indicators.map(i =>
+    `<div class="indicator"><div class="indicator-dot ${i.type}"></div><div class="indicator-text">${i.text}</div></div>`
+  ).join('');
+
+  // Flagged phrases
+  let display = originalText.length > 500 ? originalText.slice(0,500) + '…' : originalText;
+  // Escape HTML first
+  display = display.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  if (r.flaggedPhrases.length) {
+    r.flaggedPhrases.forEach(p => {
+      if (p) {
+        const rx = new RegExp(p.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'gi');
+        display = display.replace(rx, m => `<span class="highlight-fake">${m}</span>`);
+      }
+    });
+    document.getElementById('highlighted-text').innerHTML = display;
+    document.getElementById('highlight-section').style.display = 'block';
+  } else {
+    document.getElementById('highlight-section').style.display = 'none';
+  }
+
+  document.getElementById('recommendation').innerHTML =
+    `<div class="rec-icon">${{REAL:'✅',FAKE:'🚫',SUSPICIOUS:'🔎'}[r.verdict]}</div>
+     <div class="rec-text">${r.recommendation}</div>`;
+
+  document.getElementById('result-card').classList.add('visible');
+  document.getElementById('result-card').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function addToHistory(r, text) {
+  analysisHistory.unshift({verdict: r.verdict.toLowerCase(), snippet: text.slice(0,55)+'…', confidence: r.confidence});
+  if (analysisHistory.length > 5) analysisHistory.pop();
+  document.getElementById('history-section').style.display = 'block';
+  document.getElementById('history-list').innerHTML = analysisHistory.map(item =>
+    `<div class="history-item">
+      <span class="history-verdict ${item.verdict}">${item.verdict.toUpperCase()}</span>
+      <span class="history-snippet">${item.snippet}</span>
+      <span class="history-conf">${item.confidence}%</span>
+    </div>`
+  ).join('');
+}
+
+updateCount();
+</script>
+</body>
+</html>
